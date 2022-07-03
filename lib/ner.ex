@@ -9,15 +9,18 @@ defmodule Ner do
   @embed_dimension 256
 
   def build_model(vocab_count, label_count) do
-    Axon.input({@batch_size, @sequence_length, @embed_dimension}, "input_chars")
+    Axon.input({@batch_size, nil}, "input_chars")
     |> Axon.embedding(vocab_count, @embed_dimension)
-    |> Axon.lstm(256)
+  #  |> Axon.nx(fn x -> Nx.squeeze(x, axes: [2]) end)
+    |> Axon.lstm(1024)
     |> then(fn {{cell, hidden}, out} ->
       out
     end)
-
     |> Axon.dropout(rate: 0.2)
     |> Axon.dense(label_count, activation: :softmax)
+  #  |> Axon.nx(fn t -> t[[-1, -1, -1]] end)
+    #|> Axon.dense(1, activation: :softmax)
+    #
 
   end
 
@@ -29,8 +32,9 @@ defmodule Ner do
         tokens
         |> Enum.chunk_every(@sequence_length, 1, :discard)
         |> Nx.tensor
-        #|> Nx.divide(vocab_count)
-        #|> Nx.reshape({:auto, @sequence_length, 1})
+      #  |> Nx.divide(vocab_count)
+        #|> Nx.reshape({:auto, 1})
+        |> IO.inspect
         |> Nx.to_batched_list(@batch_size)
 
 
@@ -38,7 +42,7 @@ defmodule Ner do
       labels
       |> Enum.chunk_every(@sequence_length, 1, :discard)
       |> Nx.tensor
-    #  |> Nx.reshape({:auto, @sequence_length, 1})
+      #|> Nx.reshape({:auto, 1})
       |> Nx.to_batched_list(@batch_size)
 
     {train_data, train_labels}
@@ -70,6 +74,8 @@ defmodule Ner do
 
     {train_data, train_labels} =
       transform_text(token_char_idx, label_char_idx, label_count, vocab_count)
+
+      IO.inspect train_data
 
     model = build_model(vocab_count, label_count)
     IO.inspect(model)

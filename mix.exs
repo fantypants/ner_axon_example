@@ -22,7 +22,7 @@ defmodule BasicAiReg.MixProject do
   defp deps do
     [
 
-    {:exla, "~> 0.3.0-dev", github: "elixir-nx/nx", sparse: "exla"},
+    {:exla, "~> 0.2.2"},
     {:nx, "~> 0.2", override: true},
     {:flow, "~> 1.1.0"},
     {:pixels, "~> 0.2.0"},
@@ -30,10 +30,10 @@ defmodule BasicAiReg.MixProject do
     {:kino, "~> 0.3.1"},
     {:explorer, "~> 0.2.0"},
     {:telemetry_metrics, "~> 0.6"},
-{:telemetry_poller, "~> 1.0"},
-      {:scidata, "~> 0.1.6"},
-      {:poison, "~> 2.2.0", override: true},
-    {:axon, "~> 0.1.0-dev", github: "elixir-nx/axon", branch: "main"},
+    {:telemetry_poller, "~> 1.0"},
+    {:scidata, "~> 0.1.6"},
+    {:poison, "~> 2.2.0", override: true},
+    {:axon, "~> 0.1.0"},
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]

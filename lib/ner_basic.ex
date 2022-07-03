@@ -1,4 +1,4 @@
-defmodule Ner do
+defmodule NerB do
   require Axon
   # From Example http://alexminnaar.com/2019/08/22/ner-rnns-tensorflow.html
   EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host]) # My :host option doesnt work, jit_apply is undefined
@@ -9,15 +9,14 @@ defmodule Ner do
   @embed_dimension 256
 
   def build_model(vocab_count, label_count) do
-    Axon.input({@batch_size, @sequence_length, @embed_dimension}, "input_chars")
-    |> Axon.embedding(vocab_count, @embed_dimension)
-    |> Axon.lstm(256)
-    |> then(fn {{cell, hidden}, out} ->
-      out
-    end)
-
-    |> Axon.dropout(rate: 0.2)
-    |> Axon.dense(label_count, activation: :softmax)
+    Axon.input({@batch_size, 100}, "input_chars")
+    |> Axon.embedding(label_count, @embed_dimension)
+    |> Axon.dropout(rate: 0.5)
+    |> Axon.conv(@batch_size, [strides: 3])
+    |> Axon.global_max_pool
+    |> Axon.dense(@batch_size, activation: :relu)
+    |> Axon.dropout(rate: 0.5)
+    |> Axon.dense(label_count, activation: :sigmoid)
 
   end
 
@@ -30,7 +29,7 @@ defmodule Ner do
         |> Enum.chunk_every(@sequence_length, 1, :discard)
         |> Nx.tensor
         #|> Nx.divide(vocab_count)
-        #|> Nx.reshape({:auto, @sequence_length, 1})
+        #|> Nx.reshape({:auto, 1})
         |> Nx.to_batched_list(@batch_size)
 
 
@@ -38,7 +37,8 @@ defmodule Ner do
       labels
       |> Enum.chunk_every(@sequence_length, 1, :discard)
       |> Nx.tensor
-    #  |> Nx.reshape({:auto, @sequence_length, 1})
+      |> Nx.reshape({:auto, 1})
+      |> Nx.equal(Nx.iota{label_count})
       |> Nx.to_batched_list(@batch_size)
 
     {train_data, train_labels}
@@ -79,11 +79,11 @@ defmodule Ner do
 
     params =
       model
-      |> Axon.Loop.trainer(:categorical_cross_entropy, :adam)
+      |> Axon.Loop.trainer(:binary_cross_entropy, :adam)
       |> Axon.Loop.metric(:accuracy)
       |> Axon.Loop.handle(:started, &log_metrics/1, every: 1)
       |> Axon.Loop.handle(:iteration_completed, &log_metrics/1, every: 1)
-      |> Axon.Loop.run(data, %{}, epochs: 1, iterations: 2)
+      |> Axon.Loop.run(data, %{}, epochs: 30, iterations: 10)
 
       IO.inspect params
 

@@ -1,4 +1,4 @@
-defmodule Ner do
+defmodule NerA do
   require Axon
   # From Example http://alexminnaar.com/2019/08/22/ner-rnns-tensorflow.html
   EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host]) # My :host option doesnt work, jit_apply is undefined
@@ -9,15 +9,12 @@ defmodule Ner do
   @embed_dimension 256
 
   def build_model(vocab_count, label_count) do
-    Axon.input({@batch_size, @sequence_length, @embed_dimension}, "input_chars")
-    |> Axon.embedding(vocab_count, @embed_dimension)
+    Axon.input({@batch_size, @sequence_length, 1}, "input_chars")
     |> Axon.lstm(256)
-    |> then(fn {{cell, hidden}, out} ->
-      out
-    end)
-
+    |> then(fn {input, out} -> out end)
+    |> Axon.nx(fn t -> t[[0..-1//1, -1]] end)
     |> Axon.dropout(rate: 0.2)
-    |> Axon.dense(label_count, activation: :softmax)
+    |> Axon.dense(vocab_count, activation: :softmax)
 
   end
 
@@ -28,17 +25,20 @@ defmodule Ner do
       train_data =
         tokens
         |> Enum.chunk_every(@sequence_length, 1, :discard)
+        |> Enum.drop(-1)
         |> Nx.tensor
-        #|> Nx.divide(vocab_count)
-        #|> Nx.reshape({:auto, @sequence_length, 1})
+        |> Nx.divide(vocab_count)
+        |> Nx.reshape({:auto, @sequence_length, 1})
         |> Nx.to_batched_list(@batch_size)
 
 
     train_labels =
-      labels
+      tokens
       |> Enum.chunk_every(@sequence_length, 1, :discard)
+      |> Enum.drop(@sequence_length)
       |> Nx.tensor
-    #  |> Nx.reshape({:auto, @sequence_length, 1})
+      |> Nx.reshape({:auto, 1})
+      |> Nx.equal(Nx.iota({vocab_count}))
       |> Nx.to_batched_list(@batch_size)
 
     {train_data, train_labels}
@@ -65,8 +65,8 @@ defmodule Ner do
       label_idx: label_idx # Label Dictionary MAp
     } = Dictionary.from_token_label_stream(token_label_array)
 
-    label_count = (label_idx |> Map.keys |> Enum.count)+1
-    vocab_count = (token_idx |> Map.keys |> Enum.count)+1
+    label_count = (label_idx |> Map.keys |> Enum.count)
+    vocab_count = (token_idx |> Map.keys |> Enum.count)
 
     {train_data, train_labels} =
       transform_text(token_char_idx, label_char_idx, label_count, vocab_count)

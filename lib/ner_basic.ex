@@ -1,22 +1,24 @@
 defmodule NerB do
   require Axon
   # From Example http://alexminnaar.com/2019/08/22/ner-rnns-tensorflow.html
-  EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host]) # My :host option doesnt work, jit_apply is undefined
+  EXLA.set_as_nx_default([:tpu, :cuda, :rocm]) # My :host option doesnt work, jit_apply is undefined
 
   @sequence_length 100
   @batch_size 128
   @lstm 1024
   @embed_dimension 256
+  @max_features 2000
 
   def build_model(vocab_count, label_count) do
-    Axon.input({nil, 1}, "input_chars")
-    |> Axon.embedding(label_count, @embed_dimension)
-    |> Axon.dropout(rate: 0.5)
+    Axon.input({nil, @sequence_length, 1}, "input_chars")
+    |> Axon.embedding(@max_features, @embed_dimension)
+    |> Axon.dropout(rate: 0.01)
+    |> Axon.conv(@batch_size, [strides: 3])
     |> Axon.conv(@batch_size, [strides: 3])
     |> Axon.global_max_pool
     |> Axon.dense(@batch_size, activation: :relu)
-    |> Axon.dropout(rate: 0.5)
-    |> Axon.dense(9, activation: :sigmoid)
+    |> Axon.dropout(rate: 0015)
+    |> Axon.dense(label_count, activation: :sigmoid)
 
   end
 
@@ -28,8 +30,9 @@ defmodule NerB do
         tokens
         |> Enum.chunk_every(@sequence_length, 1, :discard)
         |> Nx.tensor
-        #|> Nx.divide(vocab_count)
-        |> Nx.reshape({:auto, 1})
+        |> Nx.divide(vocab_count)
+        |> Nx.reshape({:auto, @sequence_length, 1})
+        |> IO.inspect
         |> Nx.to_batched_list(@batch_size)
 
 
@@ -37,8 +40,9 @@ defmodule NerB do
       labels
       |> Enum.chunk_every(@sequence_length, 1, :discard)
       |> Nx.tensor
-      |> Nx.reshape({:auto, 1})
-      |> Nx.equal(Nx.iota{label_count})
+    #  |> Nx.reshape({:auto, 1})
+      #|> Nx.equal(Nx.iota{label_count})
+      |> IO.inspect
       |> Nx.to_batched_list(@batch_size)
 
     {train_data, train_labels}
@@ -52,7 +56,7 @@ defmodule NerB do
   def rnn_loss(y_true, y_pred) do
     y_true
     |> Axon.Losses.categorical_cross_entropy(y_pred)
-    |> Nx.sum()
+  #  |> Nx.sum()
   end
 
   def generate(model, params, init_seq, token_idx, char_idx) do
@@ -74,23 +78,34 @@ defmodule NerB do
 
     end)
 
-    Enum.reduce(1..@sequence_length, init_seq, fn _, seq ->
+    Enum.reduce(1..80, init_seq, fn _, seq ->
       init_seq =
         seq
       #  |> Enum.take(-@sequence_length)
         |> Nx.tensor()
-        |> Nx.reshape({:auto, 1})
+      #  |> Nx.reshape({:auto, @sequence_length, 1})
 
       char =
         Axon.predict(model, params, init_seq)
-        |> Nx.argmax()
-        |> IO.inspect
+        #|> IO.inspect
+        |> Nx.mean()
         |> Nx.to_number()
 
       seq ++ [char]
     end)
+    |> Enum.map(fn t ->
+      #Map.get(char_idx, t)
+      el = Enum.find(token_idx, fn {k, v} ->
+
+        v == t
+
+      end)
+
+      if(!is_nil(el)) do
+        elem(el, 0)
+      end
+    end)
     |> IO.inspect
-    |> Enum.map(fn t -> Map.get(char_idx, t) end)
   end
 
 
@@ -105,47 +120,36 @@ defmodule NerB do
       label_idx: label_idx # Label Dictionary MAp
     } = Dictionary.from_token_label_stream(token_label_array)
 
-    characters = token_idx |> Enum.uniq() |> Enum.sort() |> IO.inspect
-    characters_count = Enum.count(characters)
-
-    labels = label_idx |> Enum.uniq() |> Enum.sort() |> IO.inspect
-    labels_count = Enum.count(labels)
-
-    IO.puts "Characters: #{characters_count} Labels: #{labels_count}"
 
 
-    # Create a mapping for every character
-    char_to_idx = Enum.with_index(characters) |> Enum.into(%{}) |> IO.inspect
-    idx_to_char = Enum.with_index(characters, &{&2, &1}) |> Enum.into(%{}) |> IO.inspect
-
-    label_to_idx = Enum.with_index(labels) |> Enum.into(%{}) |> IO.inspect
-    idx_to_label = Enum.with_index(labels, &{&2, &1}) |> Enum.into(%{}) |> IO.inspect
-
-  #  label_count = (label_idx |> Map.keys |> Enum.count)+1
-  #  vocab_count = (token_idx |> Map.keys |> Enum.count)+1
-
-    #{train_data, train_labels} =
-    #  transform_text(token_char_idx, label_char_idx, label_count, vocab_count)
-
-    #model = build_model(vocab_count, label_count)
-    #IO.inspect(model)
 
 
-    #data = Stream.zip(train_data, train_labels)
 
-    #params =
-    #  model
-    #  |> Axon.Loop.trainer(:binary_cross_entropy, :adam)
-    #  |> Axon.Loop.metric(:accuracy)
-    #  |> Axon.Loop.handle(:started, &log_metrics/1, every: 1)
-    #  |> Axon.Loop.handle(:iteration_completed, &log_metrics/1, every: 1)
-    #  |> Axon.Loop.run(data, %{}, epochs: 1, iterations: 1)
+    label_count = (label_idx |> Map.keys |> Enum.count)
+    vocab_count = (token_idx |> Map.keys |> Enum.count)
+    IO.puts "Characters: #{vocab_count} Labels: #{label_count}"
+    {train_data, train_labels} =
+      transform_text(token_char_idx, label_char_idx, label_count, vocab_count)
 
-    #  IO.inspect params
-      #init_seq = "the big EU dog frog cat juice none zero that dawg"
+    model = build_model(vocab_count, label_count)
+    IO.inspect(model)
 
-      #generate(model, params, init_seq, token_idx, label_idx)
-    #  |> IO.inspect
+
+    data = Stream.zip(train_data, train_labels)
+
+    params =
+      model
+      |> Axon.Loop.trainer(:binary_cross_entropy, :adam)
+      |> Axon.Loop.metric(:accuracy)
+      |> Axon.Loop.handle(:started, &log_metrics/1, every: 1)
+      |> Axon.Loop.handle(:iteration_completed, &log_metrics/1, every: 1)
+      |> Axon.Loop.run(data, %{}, epochs: 3, iterations: 1)
+
+      IO.inspect params
+      init_seq = "B-ORG the big EU dog frog cat juice none zero that dawg fdsfs fsdfsdfsd fsdfsdf fdsf fdsf sdfsd fsd f sdf ds fsd"
+
+      generate(model, params, init_seq, token_idx, label_idx)
+      |> IO.inspect
 
   end
 end

@@ -1,5 +1,108 @@
 defmodule Dictionary do
+  def from_dataseries(token_label_array, opts \\ []) do
 
+    full_array =
+      token_label_array
+      |> Stream.map(fn [token, labels] ->
+
+
+          case token do
+          [t | rest] ->
+            
+
+          #  text_array =
+              #split_text(token)
+              #|> Enum.reject(fn str -> str == "" end)
+
+              [token, labels]
+
+          _->
+          text_array =
+            split_text(token)
+            |> Enum.reject(fn str -> str == "" end)
+
+            [text_array ++ [""], labels]
+
+          end
+
+
+
+      end)
+      |> Stream.reject(fn x -> is_nil(x) end)
+
+
+      token_array =
+      full_array
+        |> Stream.flat_map(fn [t, l] -> t end)
+
+      label_array =
+      full_array
+        |> Stream.flat_map(fn [t, l] -> l end)
+
+      token_idx =
+        token_array
+        |> Stream.uniq
+        |> Stream.with_index
+        |> Enum.into(%{})
+
+      label_idx =
+        label_array
+        |> Stream.uniq
+        |> Stream.with_index
+        |> Enum.into(%{})
+
+
+      idx_to_token =
+          token_array
+          |> Stream.uniq
+          |> Enum.with_index(&{&2, &1})
+          |> Enum.into(%{})
+
+      idx_to_label =
+        label_array
+        |> Stream.uniq
+        |> Enum.with_index(&{&2, &1})
+        |> Enum.into(%{})
+
+
+        token_char_idx =
+          token_array
+          |> Stream.map(fn tk ->
+            Map.get(token_idx, tk)
+          end)
+
+        label_char_idx =
+            label_array
+            |> Stream.map(fn tk ->
+              Map.get(label_idx, tk)
+            end)
+
+
+
+
+
+
+            if(opts[:verbose])do
+             {
+               token_char_idx,
+               label_char_idx,
+               {token_idx, idx_to_token},
+               {label_idx, idx_to_label},
+               full_array
+             }
+           else
+             {
+               token_char_idx,
+               label_char_idx,
+               {token_idx, idx_to_token},
+               {label_idx, idx_to_label},
+             }
+           end
+
+
+
+
+  end
 
   def from_token_label_stream(token_label_array) do
 
@@ -31,11 +134,18 @@ defmodule Dictionary do
         |> Stream.with_index
         |> Enum.into(%{})
 
+
+
+
+
+
       label_idx =
         label_array
         |> Stream.uniq
         |> Stream.with_index
         |> Enum.into(%{})
+
+
 
 
         token_char_idx =

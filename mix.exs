@@ -22,7 +22,7 @@ defmodule BasicAiReg.MixProject do
   defp deps do
     [
 
-    {:exla, "~> 0.2.2"},
+    {:exla, path: "../nx/exla"},
     {:nx, "~> 0.2", override: true},
     {:flow, "~> 1.1.0"},
     {:pixels, "~> 0.2.0"},

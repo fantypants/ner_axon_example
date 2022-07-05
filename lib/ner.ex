@@ -9,16 +9,16 @@ defmodule Ner do
   @embed_dimension 256
 
   def build_model(vocab_count, label_count) do
-    Axon.input({@batch_size, nil}, "input_chars")
-    |> Axon.embedding(vocab_count, @embed_dimension)
-  #  |> Axon.nx(fn x -> Nx.squeeze(x, axes: [2]) end)
+    Axon.input({@batch_size, nil, 1}, "input_chars")
+    #|> Axon.embedding(vocab_count, @embed_dimension)
     |> Axon.lstm(1024)
     |> then(fn {{cell, hidden}, out} ->
       out
     end)
     |> Axon.dropout(rate: 0.2)
     |> Axon.dense(label_count, activation: :softmax)
-  #  |> Axon.nx(fn t -> t[[-1, -1, -1]] end)
+
+    #|> Axon.flatten()
     #|> Axon.dense(1, activation: :softmax)
     #
 
@@ -33,8 +33,8 @@ defmodule Ner do
         |> Enum.chunk_every(@sequence_length, 1, :discard)
         |> Nx.tensor
       #  |> Nx.divide(vocab_count)
-        #|> Nx.reshape({:auto, 1})
-        |> IO.inspect
+        |> Axon.Layers.embedding(Nx.iota{vocab_count, @embed_dimension})
+        |> Nx.reshape({:auto, @sequence_length, 1})
         |> Nx.to_batched_list(@batch_size)
 
 
@@ -42,7 +42,9 @@ defmodule Ner do
       labels
       |> Enum.chunk_every(@sequence_length, 1, :discard)
       |> Nx.tensor
+      |> Axon.Layers.embedding(Nx.iota{vocab_count, @embed_dimension})
       #|> Nx.reshape({:auto, 1})
+      |> Nx.reshape({:auto, @sequence_length, 1})
       |> Nx.to_batched_list(@batch_size)
 
     {train_data, train_labels}
@@ -69,8 +71,8 @@ defmodule Ner do
       label_idx: label_idx # Label Dictionary MAp
     } = Dictionary.from_token_label_stream(token_label_array)
 
-    label_count = (label_idx |> Map.keys |> Enum.count)+1
-    vocab_count = (token_idx |> Map.keys |> Enum.count)+1
+    label_count = (label_idx |> Map.keys |> Enum.count)
+    vocab_count = (token_idx |> Map.keys |> Enum.count)
 
     {train_data, train_labels} =
       transform_text(token_char_idx, label_char_idx, label_count, vocab_count)

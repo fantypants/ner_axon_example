@@ -15,9 +15,9 @@ defmodule BiNer do
   def train(model, data) do
 
     model
-    |> Axon.Loop.trainer(&rnn_loss/2, Axon.Optimizers.adam(0.001))
+    |> Axon.Loop.trainer(:categorical_cross_entropy, Axon.Optimizers.adam(0.001))
     |> Axon.Loop.metric(:accuracy, "Accuracy")
-    |> Axon.Loop.run(data, %{}, epochs: 10, iterations: 3)
+    |> Axon.Loop.run(data, %{}, epochs: 3, iterations: 1)
 
   end
 
@@ -28,7 +28,7 @@ defmodule BiNer do
 
   def rnn_loss(y_true, y_pred) do
     y_true
-    |> Axon.Losses.categorical_cross_entropy(y_pred, [sparse: true])
+    |> Axon.Losses.categorical_cross_entropy(y_pred, [sparse: false])
     |> Nx.sum()
   end
 
@@ -111,7 +111,7 @@ defmodule BiNer do
       words
       |> Enum.chunk_every(@sequence_length, 1, :discard)
       |> Nx.tensor
-      |> Nx.divide(word_count)
+      #|> Nx.divide(_count)
       |> Nx.reshape({:auto, @sequence_length, 1})
       |> Nx.to_batched_list(@batch_size)
 
@@ -120,6 +120,7 @@ defmodule BiNer do
       labels
       |> Enum.chunk_every(@sequence_length, 1, :discard)
       |> Nx.tensor
+      #|> Nx.divide(_count)
       |> Nx.reshape({:auto, @sequence_length, 1})
       |> Nx.to_batched_list(@batch_size)
 
@@ -153,24 +154,68 @@ defmodule BiNer do
       {train_data, train_labels}
   end
 
-  def predict(init_sequence, params, model) do
+  def predict(init_sequence, params, model, idx_to_char, idx_to_label) do
 
-        Enum.reduce(1..100, {[], []}, fn _, seq ->
+        Enum.reduce(1..20, [], fn _, seq ->
+          d =
+            init_sequence
+            |> Nx.equal(Nx.iota{8})
+
           p = Axon.predict(model, params, init_sequence) |> IO.inspect
+
           tchar =
             p
             |> Nx.argmax(axis: -1)
-            |> Nx.sum()
-            |> Nx.to_number()
-            |> IO.inspect
+            
 
-          char =
-            p
-            |> Nx.sum()
-            |> Nx.to_number()
-            |> IO.inspect
+            tchar2 =
+              p
+              |> Nx.argmax(axis: 2)
+              #|> Nx.sum()
+              #|> Nx.to_number()
+              
 
-          {elem(seq, 0) ++ [tchar], elem(seq, 1) ++ [char]}
+            tchar2 =
+              p
+              |> Nx.argmax(axis: 2)
+              |> Nx.to_flat_list
+              
+
+
+          fed =
+          init_sequence
+          |> Nx.to_flat_list
+
+          res =
+          tchar2
+
+          seq ++ [{fed, res}]
+
+        end)
+        |> Enum.map(fn {inp, res} ->
+
+          input =
+          inp
+          |> Enum.map(fn inpseq ->
+            Map.fetch!(idx_to_char, inpseq)
+          end)
+
+
+
+          output =
+          res
+          |> Enum.map(fn inpseq ->
+            Map.fetch!(idx_to_label, inpseq)
+          end)
+
+
+
+
+
+
+
+
+          {input, output}
         end)
         |> IO.inspect
 
@@ -193,7 +238,7 @@ defmodule BiNer do
     {tokenized_chars, tokenized_labels, {char_to_idx, idx_to_char}, {label_to_idx, idx_to_label}, word_label_array} = Dictionary.from_dataseries(normalized_train_data_series, [verbose: true])
 
 
-    {tokenized_test_chars, tokenized_test_labels, _char_idx_dict, _charlabel_dict, _word_label_array} = Dictionary.from_dataseries(normalized_test_data_series, [verbose: true])
+    {tokenized_test_chars, tokenized_test_labels, _char_idx_dict, _charlabel_dict, _word_label_array} = Dictionary.from_dataseries(normalized_test_data_series, [verbose: true, token_dict: char_to_idx, label_dict: label_to_idx])
 
     {tokenized_validate_chars, _tokenized_labels, _char_idx_dict, _charlabel_dict, _word_label_array} = Dictionary.from_dataseries(normalized_validate_data_series, [verbose: true])
 
@@ -236,12 +281,30 @@ defmodule BiNer do
 
       data = Stream.zip(train_data, train_labels)
 
-      params = train(unpadded_model, data)
+      unpadded_params = train(unpadded_model, data)
 
-      i = Enum.fetch!(test_data, 0)
 
-      predict(i, params, unpadded_model)
+
+      #serialized = Axon.serialize(unpadded_model, params)
+
+    #  File.write!("./model_a", serialized)
+      #serialized = File.read!("./model_a")
+
+      #{saved_model, saved_params} = Axon.deserialize(serialized)
+
+
+
+
+      i = Enum.fetch!(test_data, 1)
+
+      #|> Nx.reshape({:auto, @sequence_length, 1})
+    #  |> Nx.equal(Nx.iota({8}))
+      #|> IO.inspect
+
+      predict(i, unpadded_params, unpadded_model, idx_to_char, idx_to_label)
 
 
   end
+
+
 end

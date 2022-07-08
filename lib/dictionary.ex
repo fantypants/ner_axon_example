@@ -1,5 +1,7 @@
 defmodule Dictionary do
+
   def from_dataseries(token_label_array, opts \\ []) do
+    IO.inspect opts
 
     full_array =
       token_label_array
@@ -8,7 +10,7 @@ defmodule Dictionary do
 
           case token do
           [t | rest] ->
-            
+
 
           #  text_array =
               #split_text(token)
@@ -68,13 +70,23 @@ defmodule Dictionary do
         token_char_idx =
           token_array
           |> Stream.map(fn tk ->
-            Map.get(token_idx, tk)
+            if(opts[:token_dict]) do
+                Map.get(opts[:token_dict], tk, 0) # supplied
+            else
+                Map.get(token_idx, tk, 0) # Generated dict
+            end
           end)
+          |> Enum.to_list
+          |> IO.inspect
 
         label_char_idx =
             label_array
             |> Stream.map(fn tk ->
-              Map.get(label_idx, tk)
+              if(opts[:label_dict]) do
+                  Map.get(opts[:label_dict], tk, 0) # supplied
+              else
+                  Map.get(label_idx, tk, 0) # Generated dict
+              end
             end)
 
 

@@ -45,7 +45,7 @@ defmodule TextEntity do
         end
 
       end)
-      |> Enum.take(512) # Slice a small sample
+      |> Enum.take(256) # Slice a small sample
       |> Stream.reject(fn x -> is_nil(x) end)
   end
 

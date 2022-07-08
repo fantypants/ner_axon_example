@@ -60,7 +60,7 @@ defmodule DataSeries do
         nil
       end
     end)
-    #|> Enum.take(256) # Slice a small sample
+    #|> Enum.take(1024) # Slice a small sample
     |> Stream.reject(fn x -> is_nil(x) end)
 
 
